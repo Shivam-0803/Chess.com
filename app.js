@@ -28,13 +28,14 @@ io.on("connection", function (uniquesocket) {
     players.white = uniquesocket.id;
     uniquesocket.emit("playerRole", "w");
   } else if (!players.black) {
-    players.white = uniquesocket.id;
+    players.black = uniquesocket.id;
     uniquesocket.emit("playerRole", "b");
   } else {
     uniquesocket.emit("spectatorRole");
+
   }
 
-  uniquesocket.on("disconnet", function () {
+  uniquesocket.on("disconnect", function () {
     if (uniquesocket.id === players.white) {
       delete players.white;
     } else if (uniquesocket.id === players.black) {

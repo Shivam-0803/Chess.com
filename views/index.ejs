@@ -3,88 +3,195 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Document</title>
+    <title>Chess Game</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
       .chessboard {
-          display: grid;
-          grid-template-columns: repeat(8, minmax(0, 1fr));
-          grid-template-rows: repeat(8, minmax(0, 1fr));
-          width: 400px;
-          height: 400px;
-          transform: rotate(0deg);
-      }
-
-      .piece.white {
-          color: white;
-          filter: drop-shadow(0 0 2px rgba(0, 0, 0, 1));
-      }
-
-      .piece.black {
-          color: black;
-      }
-
-      .flipped {
-          transform: rotate(180deg);
+        display: grid;
+        grid-template-columns: repeat(8, minmax(0, 1fr));
+        grid-template-rows: repeat(8, minmax(0, 1fr));
+        width: 100%;
+        max-width: 400px;
+        aspect-ratio: 1;
+        border: 4px solid #333;
+        box-shadow: 0 0 15px rgba(0, 0, 0, 0.6);
+        transition: transform 0.3s ease;
+        background-color: #222;
+        border-radius: 0.75rem;
       }
 
       .square {
-          display: flex;
-          align-items: center;
-          justify-content: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        user-select: none;
+        transition: background-color 0.2s ease;
       }
 
       .square.light {
-          background-color: #f0d9b5;
+        background-color: #f0d9b5;
       }
 
       .square.dark {
-          background-color: #b58863;
+        background-color: #b58863;
+      }
+
+      .square:hover {
+        filter: brightness(1.1);
       }
 
       .piece {
-          font-size: 36px;
-          font-weight: 500;
-          cursor: pointer;
+        font-size: 36px;
+        font-weight: 500;
+        cursor: grab;
+        transition: transform 0.2s ease, opacity 0.2s ease;
+        font-family: "Segoe UI Symbol", "Noto Sans Symbols", "Arial Unicode MS", sans-serif;
       }
 
-      .piece.draggable {
-          cursor: grab;
+      .piece.white {
+        color: #ffffff;
+        filter: drop-shadow(0 0 2px #000);
+      }
+
+      .piece.black {
+        color: #000000;
+        filter: drop-shadow(0 0 1px #fff);
       }
 
       .dragging {
-          opacity: 0.5;
+        opacity: 0.5;
+        transform: scale(1.1);
       }
 
-      /* Rotate pieces for black player */
+      .dot {
+        position: absolute;
+        width: 20%;
+        height: 20%;
+        background-color: rgba(0, 0, 0, 0.4);
+        border-radius: 50%;
+        pointer-events: none;
+        z-index: 1;
+      }
+
+      .dot.capture {
+        width: 80%;
+        height: 80%;
+        background-color: rgba(255, 0, 0, 0.5);
+        border-radius: 50%;
+        outline: 2px solid red;
+      }
+
+      .square.selected {
+        outline: 3px solid cyan;
+      }
+
+      .square.highlight {
+        background-color: rgba(255, 255, 0, 0.3) !important;
+      }
+
+      .flipped {
+        transform: rotate(180deg);
+      }
+
       .flipped .piece {
-          transform: rotate(180deg);
+        transform: rotate(180deg);
       }
-  </style>
 
+      #white-timer, #black-timer {
+        font-size: 1.5rem;
+        font-weight: bold;
+        padding: 0.25rem 0.75rem;
+        border-radius: 0.375rem;
+        background-color: #1f2937;
+        box-shadow: inset 0 0 4px #000, 0 0 8px rgba(255, 255, 255, 0.1);
+      }
+
+      /* ✅ Checkmate overlay effect */
+      .checkmate-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        backdrop-filter: blur(3px);
+        background-color: rgba(0, 0, 0, 0.7);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+      }
+
+      .checkmate-overlay.show {
+        display: flex;
+        animation: fadeIn 0.5s ease-in-out forwards;
+      }
+
+      .checkmate-message {
+        font-size: 2rem;
+        font-weight: bold;
+        color: white;
+        background: linear-gradient(to right, #facc15, #f97316);
+        padding: 1rem 2rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
+        text-shadow: 1px 1px 2px #000;
+        animation: pop 0.5s ease-in-out;
+      }
+
+      @keyframes pop {
+        0% {
+          transform: scale(0.6);
+          opacity: 0;
+        }
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+    </style>
   </head>
-  <body>
+  <body class="bg-zinc-900 text-white relative">
+    <div class="w-full h-screen flex flex-col items-center justify-center gap-6">
+      <!-- ✅ Timer Display -->
+      <div class="flex gap-10 text-xl font-semibold text-white">
+        <div class="flex items-center gap-2">
+          <span class="text-gray-300">White:</span>
+          <span id="white-timer">10:00</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-gray-300">Black:</span>
+          <span id="black-timer">10:00</span>
+        </div>
+      </div>
 
-
-    <div class="w-full h-screen bg-zinc-900 flex items-center justify-center ">
-        <div class=" chessboard w-96 h-96 bg-red-800"></div>
+      <!-- Chessboard -->
+      <div id="board" class="chessboard"></div>
     </div>
 
+    <!-- ✅ Checkmate Overlay -->
+    <div id="checkmateOverlay" class="checkmate-overlay">
+      <div id="checkmateMessage" class="checkmate-message">Checkmate! White wins!</div>
+    </div>
 
-    <script
-      src="https://cdn.socket.io/4.8.1/socket.io.min.js"
-      integrity="sha384-mkQ3/7FUtcGyoppY6bz/PORYoGqOl7/aSUMn2ymDOJcapfS6PHqxhRTMh1RR0Q6+"
-      crossorigin="anonymous"
-    ></script>
-
-
-    <script
-      src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"
-      integrity="sha512-xRllwz2gdZciIB+AkEbeq+gVhX8VB8XsfqeFbUh+SzHlN96dEduwtTuVuc2u9EROlmW9+yhRlxjif66ORpsgVA=="
-      crossorigin="anonymous"
-      referrerpolicy="no-referrer"
-    ></script>
-
+    <!-- Scripts -->
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="/js/chessgame.js"></script>
+
+
+
+
+    
+
   </body>
 </html>

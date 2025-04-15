@@ -41,6 +41,41 @@ io.on("connection", function (uniquesocket) {
     } else if (uniquesocket.id === players.black) {
       delete players.black;
     }
+
+
+
+
+    // Modifications to app.js to support WebRTC
+
+// Add this after existing socket listeners in the io.on('connection') block:
+
+  // WebRTC signaling
+  uniquesocket.on('webrtc_offer', (offerData) => {
+    // Forward the offer to the other player
+    if (offerData.role === 'w' && players.black) {
+      io.to(players.black).emit('webrtc_offer', offerData);
+    } else if (offerData.role === 'b' && players.white) {
+      io.to(players.white).emit('webrtc_offer', offerData);
+    }
+  });
+
+  uniquesocket.on('webrtc_answer', (answerData) => {
+    // Forward the answer to the other player
+    if (answerData.role === 'b' && players.white) {
+      io.to(players.white).emit('webrtc_answer', answerData);
+    } else if (answerData.role === 'w' && players.black) {
+      io.to(players.black).emit('webrtc_answer', answerData);
+    }
+  });
+
+  uniquesocket.on('webrtc_ice_candidate', (candidateData) => {
+    // Forward ICE candidate to the other player
+    if (candidateData.role === 'w' && players.black) {
+      io.to(players.black).emit('webrtc_ice_candidate', candidateData);
+    } else if (candidateData.role === 'b' && players.white) {
+      io.to(players.white).emit('webrtc_ice_candidate', candidateData);
+    }
+  });
   });
 
   uniquesocket.on("move", (move) => {
@@ -62,6 +97,8 @@ io.on("connection", function (uniquesocket) {
     }
   });
 });
+
+
 
 server.listen(3000, function () {
   console.log("Running server");

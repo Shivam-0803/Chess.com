@@ -3,9 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Chess Game</title>
+    <title>Chess Game with Video Chat</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
+      /* --- your chessboard and UI styles remain unchanged --- */
       .chessboard {
         display: grid;
         grid-template-columns: repeat(8, minmax(0, 1fr));
@@ -98,7 +99,8 @@
         transform: rotate(180deg);
       }
 
-      #white-timer, #black-timer {
+      #white-timer,
+      #black-timer {
         font-size: 1.5rem;
         font-weight: bold;
         padding: 0.25rem 0.75rem;
@@ -107,7 +109,6 @@
         box-shadow: inset 0 0 4px #000, 0 0 8px rgba(255, 255, 255, 0.1);
       }
 
-      /* ✅ Checkmate overlay effect */
       .checkmate-overlay {
         position: absolute;
         top: 0;
@@ -161,24 +162,62 @@
     </style>
   </head>
   <body class="bg-zinc-900 text-white relative">
-    <div class="w-full h-screen flex flex-col items-center justify-center gap-6">
-      <!-- ✅ Timer Display -->
-      <div class="flex gap-10 text-xl font-semibold text-white">
-        <div class="flex items-center gap-2">
-          <span class="text-gray-300">White:</span>
-          <span id="white-timer">10:00</span>
+    <div class="w-full min-h-screen py-8 flex flex-col md:flex-row items-center justify-center gap-8">
+      <!-- Left side - Video and Controls -->
+      <div class="flex flex-col items-center gap-4">
+        <!-- Video Containers -->
+        <div class="video-container bg-gray-900 rounded-lg p-4">
+          <div class="flex flex-col gap-4">
+            <!-- Opponent Video -->
+            <div class="bg-gray-800 rounded-lg overflow-hidden shadow-md">
+              <video id="remoteVideo" autoplay playsinline class="w-full aspect-video object-cover"></video>
+              <div class="p-2 text-center text-sm text-gray-300">Opponent</div>
+            </div>
+
+            <!-- Your Video -->
+            <div class="bg-gray-800 rounded-lg overflow-hidden shadow-md">
+              <video id="localVideo" autoplay playsinline muted class="w-full aspect-video object-cover"></video>
+              <div class="p-2 text-center text-sm text-gray-300">You</div>
+            </div>
+          </div>
+
+          <!-- Video Controls -->
+          <div id="videoControls" class="mt-4 p-3 bg-gray-800 rounded-lg flex flex-col gap-2">
+            <button id="startVideo" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">
+              Start Video
+            </button>
+            <div class="flex gap-2">
+              <button id="toggleMute" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm">
+                Mute
+              </button>
+              <button id="toggleCamera" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm">
+                Turn Camera Off
+              </button>
+            </div>
+          </div>
         </div>
-        <div class="flex items-center gap-2">
-          <span class="text-gray-300">Black:</span>
-          <span id="black-timer">10:00</span>
+
+        <!-- Timer Display -->
+        <div class="flex gap-10 text-xl font-semibold text-white">
+          <div class="flex items-center gap-2">
+            <span class="text-gray-300">White:</span>
+            <span id="white-timer">10:00</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-gray-300">Black:</span>
+            <span id="black-timer">10:00</span>
+          </div>
         </div>
       </div>
 
-      <!-- Chessboard -->
-      <div id="board" class="chessboard"></div>
+      <!-- Right side - Chessboard -->
+      <div class="flex flex-col items-center">
+        <!-- Chessboard -->
+        <div id="board" class="chessboard"></div>
+      </div>
     </div>
 
-    <!-- ✅ Checkmate Overlay -->
+    <!-- Checkmate Overlay -->
     <div id="checkmateOverlay" class="checkmate-overlay">
       <div id="checkmateMessage" class="checkmate-message">Checkmate! White wins!</div>
     </div>
@@ -187,11 +226,6 @@
     <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="/js/chessgame.js"></script>
-
-
-
-
-    
-
+    <script src="/js/webrtc.js"></script>
   </body>
 </html>

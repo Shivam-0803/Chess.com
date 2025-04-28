@@ -5,20 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chess Game with Video Chat</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
     <style>
-      /* --- your chessboard and UI styles remain unchanged --- */
+      /* Chessboard and Game UI */
       .chessboard {
         display: grid;
-        grid-template-columns: repeat(8, minmax(0, 1fr));
-        grid-template-rows: repeat(8, minmax(0, 1fr));
+        grid-template-columns: repeat(8, 1fr);
+        grid-template-rows: repeat(8, 1fr);
         width: 100%;
-        max-width: 400px;
-        aspect-ratio: 1;
-        border: 4px solid #333;
-        box-shadow: 0 0 15px rgba(0, 0, 0, 0.6);
-        transition: transform 0.3s ease;
-        background-color: #222;
-        border-radius: 0.75rem;
+        max-width: 95vmin;
+        max-height: 95vmin;
+        aspect-ratio: 1/1;
+        border: 8px solid #444;
+        box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
+        border-radius: 1.5rem;
+        background-color: #1e293b;
+        overflow: hidden;
+        transition: transform 0.4s ease;
+        animation: boardPop 0.8s ease forwards;
       }
 
       .square {
@@ -43,8 +47,8 @@
       }
 
       .piece {
-        font-size: 36px;
-        font-weight: 500;
+        font-size: clamp(32px, 6vw, 56px);
+        font-weight: 550;
         cursor: grab;
         transition: transform 0.2s ease, opacity 0.2s ease;
         font-family: "Segoe UI Symbol", "Noto Sans Symbols", "Arial Unicode MS", sans-serif;
@@ -61,7 +65,7 @@
       }
 
       .dragging {
-        opacity: 0.5;
+        opacity: 0.2;
         transform: scale(1.1);
       }
 
@@ -101,12 +105,13 @@
 
       #white-timer,
       #black-timer {
-        font-size: 1.5rem;
+        font-size: 1.25rem;
         font-weight: bold;
         padding: 0.25rem 0.75rem;
         border-radius: 0.375rem;
         background-color: #1f2937;
         box-shadow: inset 0 0 4px #000, 0 0 8px rgba(255, 255, 255, 0.1);
+        display: flex;
       }
 
       .checkmate-overlay {
@@ -159,62 +164,79 @@
           opacity: 1;
         }
       }
+
+      /* Responsive Tweaks */
+      @media (max-width: 768px) {
+        .chessboard {
+          max-width: 90vw;
+        }
+
+        #white-timer,
+        #black-timer {
+          font-size: 1rem;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .chessboard {
+          max-width: 90vw;
+        }
+
+        .checkmate-message {
+          font-size: 1.5rem;
+        }
+      }
     </style>
   </head>
-  <body class="bg-zinc-900 text-white relative">
-    <div class="w-full min-h-screen py-8 flex flex-col md:flex-row items-center justify-center gap-8">
-      <!-- Left side - Video and Controls -->
-      <div class="flex flex-col items-center gap-4">
-        <!-- Video Containers -->
-        <div class="video-container bg-gray-900 rounded-lg p-4">
-          <div class="flex flex-col gap-4">
-            <!-- Opponent Video -->
-            <div class="bg-gray-800 rounded-lg overflow-hidden shadow-md">
-              <video id="remoteVideo" autoplay playsinline class="w-full aspect-video object-cover"></video>
-              <div class="p-2 text-center text-sm text-gray-300">Opponent</div>
-            </div>
 
-            <!-- Your Video -->
-            <div class="bg-gray-800 rounded-lg overflow-hidden shadow-md">
-              <video id="localVideo" autoplay playsinline muted class="w-full aspect-video object-cover"></video>
-              <div class="p-2 text-center text-sm text-gray-300">You</div>
-            </div>
+  <body class="bg-zinc-900 text-white min-h-screen flex flex-col">
+    <div class="flex flex-col md:flex-row justify-center items-center gap-6 p-4 w-full h-full">
+
+      <!-- Left: Video and Timer -->
+      <div class="flex flex-col items-center gap-4 w-full md:w-1/2">
+        <div class="flex flex-col gap-4 w-full">
+
+          <!-- Opponent Video -->
+          <div class="relative bg-gray-800 rounded-2xl overflow-hidden shadow-lg w-full aspect-video">
+            <video id="remoteVideo" autoplay playsinline class="w-full h-full object-cover"></video>
+            <div class="absolute bottom-2 left-1/2 transform -translate-x-1/2 text-xs text-gray-300">Opponent</div>
+          </div>
+
+          <!-- Your Video -->
+          <div class="relative bg-gray-800 rounded-2xl overflow-hidden shadow-lg w-full aspect-video">
+            <video id="localVideo" autoplay playsinline muted class="w-full h-full object-cover"></video>
+            <div class="absolute bottom-2 left-1/2 transform -translate-x-1/2 text-xs text-gray-300">You</div>
           </div>
 
           <!-- Video Controls -->
-          <div id="videoControls" class="mt-4 p-3 bg-gray-800 rounded-lg flex flex-col gap-2">
-            <button id="startVideo" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">
-              Start Video
-            </button>
+          <div id="videoControls" class="flex flex-col gap-2 p-4 bg-gray-800 rounded-2xl shadow-md w-full">
+            <button id="startVideo" class="w-full bg-blue-500 hover:bg-blue-600 py-2 rounded-lg font-semibold text-sm">Start Video</button>
             <div class="flex gap-2">
-              <button id="toggleMute" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm">
-                Mute
-              </button>
-              <button id="toggleCamera" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm">
-                Turn Camera Off
-              </button>
+              <button id="toggleMute" class="flex-1 bg-green-500 hover:bg-green-600 py-2 rounded-lg font-semibold text-sm">Mute</button>
+              <button id="toggleCamera" class="flex-1 bg-green-500 hover:bg-green-600 py-2 rounded-lg font-semibold text-sm">Camera Off</button>
             </div>
           </div>
+
         </div>
 
-        <!-- Timer Display -->
-        <div class="flex gap-10 text-xl font-semibold text-white">
-          <div class="flex items-center gap-2">
-            <span class="text-gray-300">White:</span>
+        <!-- Timer -->
+        <div class="flex justify-between items-center w-full p-3 bg-gray-800 rounded-2xl shadow-md text-base font-bold mt-4">
+          <div class="flex flex-col items-center">
+            <span class="text-gray-400 text-sm">White</span>
             <span id="white-timer">10:00</span>
           </div>
-          <div class="flex items-center gap-2">
-            <span class="text-gray-300">Black:</span>
+          <div class="flex flex-col items-center">
+            <span class="text-gray-400 text-sm">Black</span>
             <span id="black-timer">10:00</span>
           </div>
         </div>
       </div>
 
-      <!-- Right side - Chessboard -->
-      <div class="flex flex-col items-center">
-        <!-- Chessboard -->
+      <!-- Right: Chessboard -->
+      <div class="flex justify-center items-center w-full md:w-1/2">
         <div id="board" class="chessboard"></div>
       </div>
+
     </div>
 
     <!-- Checkmate Overlay -->

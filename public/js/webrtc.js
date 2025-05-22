@@ -30,6 +30,9 @@ let connectionStatus = "disconnected"; // Track connection status
 // Check if running in secure context
 const isSecureContext = window.isSecureContext || location.protocol === 'https:' || location.hostname === 'localhost';
 
+// Detect mobile browser
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
 // Debug logger
 function logDebug(type, message, data = null) {
   const emoji = {
@@ -211,10 +214,17 @@ async function startVideo() {
       alert("WebRTC requires a secure connection (HTTPS). Video chat may not work on insecure connections.");
     }
     
+    // Set video constraints based on device
+    const videoConstraints = {
+      width: isMobile ? { ideal: 640 } : { ideal: 1280 },
+      height: isMobile ? { ideal: 480 } : { ideal: 720 },
+      facingMode: "user"
+    };
+    
     try {
       // Try with both video and audio
       localStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
+        video: videoConstraints,
         audio: true
       });
       localVideo.srcObject = localStream;
@@ -307,6 +317,7 @@ function createPeerConnection() {
   updateConnectionStatus("connecting");
   peerConnection = new RTCPeerConnection(configuration);
 
+  // Add all local tracks to the peer connection
   if (localStream) {
     localStream.getTracks().forEach(track => {
       logDebug("media", `Adding ${track.kind} track to peer connection`);
@@ -314,6 +325,7 @@ function createPeerConnection() {
     });
   }
 
+  // Handle ICE candidates
   peerConnection.onicecandidate = event => {
     if (event.candidate) {
       logDebug("ice", "Sending ICE candidate:", event.candidate.candidate.substring(0, 50) + "...");
@@ -321,17 +333,23 @@ function createPeerConnection() {
         candidate: event.candidate,
         role: localRole
       });
+    } else {
+      logDebug("ice", "All ICE candidates gathered");
     }
   };
 
+  // Handle incoming tracks
   peerConnection.ontrack = event => {
     logDebug("media", `Remote ${event.track.kind} track received`);
+    
+    // Always use the most recent stream
     remoteVideo.srcObject = event.streams[0];
     remoteVideo.classList.add('has-video');
     
     // Log when remote tracks start/end
     event.track.onunmute = () => {
       logDebug("media", `Remote ${event.track.kind} track unmuted`);
+      updateConnectionStatus("media streaming");
     };
     
     event.track.onmute = () => {
@@ -340,50 +358,109 @@ function createPeerConnection() {
     
     event.track.onended = () => {
       logDebug("media", `Remote ${event.track.kind} track ended`);
+      if (event.track.kind === 'video') {
+        // Try to reconnect if video track ends unexpectedly
+        setTimeout(() => {
+          if (peerConnection.connectionState === 'connected' && !remoteVideo.srcObject) {
+            logDebug("connection", "Video track ended unexpectedly, attempting reconnection");
+            reconnect();
+          }
+        }, 2000);
+      }
     };
   };
 
+  // Monitor ICE connection state
   peerConnection.oniceconnectionstatechange = () => {
     logDebug("connection", `ICE connection state: ${peerConnection.iceConnectionState}`);
     updateConnectionStatus(peerConnection.iceConnectionState);
     
-    if (['disconnected', 'failed', 'closed'].includes(peerConnection.iceConnectionState)) {
+    // Handle connection problems
+    if (peerConnection.iceConnectionState === 'failed') {
+      logDebug("connection", "ICE connection failed, attempting restart");
+      peerConnection.restartIce();
+    } else if (['disconnected', 'closed'].includes(peerConnection.iceConnectionState)) {
       handleDisconnect();
     }
   };
   
+  // Monitor signaling state
   peerConnection.onsignalingstatechange = () => {
     logDebug("connection", `Signaling state: ${peerConnection.signalingState}`);
   };
   
+  // Monitor overall connection state
   peerConnection.onconnectionstatechange = () => {
     logDebug("connection", `Connection state: ${peerConnection.connectionState}`);
     
     if (peerConnection.connectionState === 'connected') {
       updateConnectionStatus("established");
+      
+      // Check if we have video tracks
+      const remoteTracks = remoteVideo.srcObject?.getTracks() || [];
+      const hasVideoTrack = remoteTracks.some(track => track.kind === 'video');
+      
+      if (!hasVideoTrack) {
+        logDebug("warning", "Connected but no remote video track");
+      }
     }
     
-    if (['disconnected', 'failed', 'closed'].includes(peerConnection.connectionState)) {
+    if (peerConnection.connectionState === 'failed') {
+      logDebug("error", "Connection failed, attempting reconnection");
+      reconnect();
+    } else if (['disconnected', 'closed'].includes(peerConnection.connectionState)) {
       handleDisconnect();
     }
   };
 }
 
-// Create and send offer
+// Function to attempt reconnection
+function reconnect() {
+  logDebug("connection", "Attempting reconnection");
+  updateConnectionStatus("reconnecting");
+  
+  // Close existing connection
+  if (peerConnection) {
+    peerConnection.close();
+    peerConnection = null;
+  }
+  
+  // Create new connection
+  createPeerConnection();
+  
+  // Reinitiate connection based on role
+  if (localRole === 'w') {
+    createAndSendOffer();
+  }
+}
+
+// Create and send offer with improved options
 async function createAndSendOffer() {
   try {
     updateConnectionStatus("creating offer");
-    const offer = await peerConnection.createOffer({
+    
+    // Create offer with specific options for better compatibility
+    const offerOptions = {
       offerToReceiveAudio: true,
-      offerToReceiveVideo: true
-    });
+      offerToReceiveVideo: true,
+      iceRestart: true,
+      voiceActivityDetection: true
+    };
+    
+    const offer = await peerConnection.createOffer(offerOptions);
+    
+    // Set local description
     await peerConnection.setLocalDescription(offer);
+    logDebug("connection", "Local description set");
 
-    logDebug("connection", "Sending offer");
-    socket.emit('webrtc_offer', {
-      sdp: peerConnection.localDescription,
-      role: localRole
-    });
+    // Wait a short time to gather some ICE candidates before sending offer
+    setTimeout(() => {
+      logDebug("connection", "Sending offer");
+      socket.emit('webrtc_offer', {
+        sdp: peerConnection.localDescription,
+        role: localRole
+      });
+    }, 500);
   } catch (err) {
     logDebug("error", "Error creating offer:", err.message);
   }
@@ -406,33 +483,71 @@ async function handleVideoOffer(offer) {
         });
         localVideo.srcObject = localStream;
         localVideo.classList.add('has-video');
+        logDebug("success", "Media access granted for answer");
       } catch (err) {
-        logDebug("error", "Error accessing media devices:", err.message);
-        alert('Could not access camera or microphone. Please check permissions.');
-        return;
+        logDebug("error", "Error accessing media devices for answer:", err.message);
+        
+        // Try with just audio as fallback
+        try {
+          localStream = await navigator.mediaDevices.getUserMedia({ 
+            video: false, 
+            audio: true 
+          });
+          localVideo.srcObject = localStream;
+          logDebug("warning", "Video failed, audio-only mode for answer");
+          alert('Could not access camera. Audio-only mode enabled.');
+        } catch (audioErr) {
+          logDebug("error", "Complete media access failure:", audioErr.message);
+          alert('Could not access camera or microphone. Please check permissions.');
+          return;
+        }
       }
     }
 
+    // Create new peer connection if needed
     if (!peerConnection) {
       createPeerConnection();
     }
 
     // Make sure the offer has the correct format
     updateConnectionStatus("processing offer");
+    
+    // Validate offer
+    if (!offer.sdp || !offer.sdp.type || offer.sdp.type !== 'offer') {
+      throw new Error("Invalid offer received");
+    }
+    
     const offerDesc = new RTCSessionDescription(offer.sdp);
+    
+    // Set remote description (the offer)
     await peerConnection.setRemoteDescription(offerDesc);
+    logDebug("connection", "Remote description set (offer)");
+    
+    // Process any queued ICE candidates
+    processIceCandidateQueue();
 
+    // Create answer with options
     updateConnectionStatus("creating answer");
-    const answer = await peerConnection.createAnswer();
+    const answerOptions = {
+      voiceActivityDetection: true
+    };
+    const answer = await peerConnection.createAnswer(answerOptions);
+    
+    // Set local description (our answer)
     await peerConnection.setLocalDescription(answer);
+    logDebug("connection", "Local description set (answer)");
 
-    logDebug("connection", "Sending answer");
-    socket.emit('webrtc_answer', {
-      sdp: peerConnection.localDescription,
-      role: localRole
-    });
+    // Wait a moment to gather ICE candidates before sending answer
+    setTimeout(() => {
+      logDebug("connection", "Sending answer");
+      socket.emit('webrtc_answer', {
+        sdp: peerConnection.localDescription,
+        role: localRole
+      });
+    }, 500);
   } catch (err) {
     logDebug("error", "Error handling offer:", err.message);
+    alert(`Connection error: ${err.message}. Try refreshing the page.`);
   }
 }
 
@@ -444,10 +559,35 @@ async function handleVideoAnswer(answer) {
   updateConnectionStatus("received answer");
 
   try {
+    // Validate answer
+    if (!answer.sdp || !answer.sdp.type || answer.sdp.type !== 'answer') {
+      throw new Error("Invalid answer received");
+    }
+    
     // Make sure the answer has the correct format
     const answerDesc = new RTCSessionDescription(answer.sdp);
+    
+    // Set remote description (the answer)
     await peerConnection.setRemoteDescription(answerDesc);
+    logDebug("connection", "Remote description set (answer)");
+    
+    // Process any queued ICE candidates
+    processIceCandidateQueue();
+    
     updateConnectionStatus("connecting");
+    
+    // Check connection after a short delay
+    setTimeout(() => {
+      if (peerConnection && peerConnection.connectionState !== 'connected') {
+        logDebug("warning", "Connection not established after answer, checking ICE");
+        
+        // If we have no remote tracks after 5 seconds, try reconnecting
+        if (!remoteVideo.srcObject || !remoteVideo.srcObject.getTracks().length) {
+          logDebug("warning", "No remote tracks received, attempting reconnection");
+          reconnect();
+        }
+      }
+    }, 5000);
   } catch (err) {
     logDebug("error", "Error handling answer:", err.message);
   }
@@ -460,15 +600,50 @@ async function handleNewICECandidate(candidate) {
     return;
   }
   
-  logDebug("ice", "Received ICE candidate:", candidate.candidate.candidate?.substring(0, 50) + "...");
-
   try {
-    if (peerConnection && candidate && candidate.candidate) {
-      const iceCandidate = new RTCIceCandidate(candidate.candidate);
-      await peerConnection.addIceCandidate(iceCandidate);
+    if (!peerConnection) {
+      logDebug("warning", "Received ICE candidate but no peer connection exists");
+      return;
     }
+    
+    // Store candidates if remote description is not set yet
+    if (peerConnection.remoteDescription === null) {
+      logDebug("ice", "Remote description not set, queuing ICE candidate");
+      
+      // Create a queue if it doesn't exist
+      if (!window.iceCandidateQueue) {
+        window.iceCandidateQueue = [];
+      }
+      
+      // Queue the candidate
+      window.iceCandidateQueue.push(candidate);
+      return;
+    }
+    
+    logDebug("ice", "Received ICE candidate:", candidate.candidate.candidate?.substring(0, 50) + "...");
+    
+    const iceCandidate = new RTCIceCandidate(candidate.candidate);
+    await peerConnection.addIceCandidate(iceCandidate);
+    logDebug("ice", "ICE candidate added successfully");
   } catch (err) {
     logDebug("error", "Error adding ICE candidate:", err.message);
+  }
+}
+
+// Function to process any queued ICE candidates
+async function processIceCandidateQueue() {
+  if (!window.iceCandidateQueue || !window.iceCandidateQueue.length) return;
+  
+  logDebug("ice", `Processing ${window.iceCandidateQueue.length} queued ICE candidates`);
+  
+  while (window.iceCandidateQueue.length) {
+    const candidate = window.iceCandidateQueue.shift();
+    try {
+      const iceCandidate = new RTCIceCandidate(candidate.candidate);
+      await peerConnection.addIceCandidate(iceCandidate);
+    } catch (err) {
+      logDebug("error", "Error processing queued ICE candidate:", err.message);
+    }
   }
 }
 

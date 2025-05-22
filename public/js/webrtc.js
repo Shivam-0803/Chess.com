@@ -8,7 +8,13 @@ const configuration = {
     { urls: 'stun:stun4.l.google.com:19302' },
     { urls: 'stun:stun.ekiga.net' },
     { urls: 'stun:stun.ideasip.com' },
-    { urls: 'stun:stun.schlund.de' }
+    { urls: 'stun:stun.schlund.de' },
+    // Free TURN server from Twilio (limited, but helps for testing)
+    {
+      urls: "turn:global.turn.twilio.com:3478?transport=udp",
+      username: "f4e5a2b3c1d0",  // These are dummy credentials
+      credential: "6789012345abcdef"
+    }
   ],
   iceCandidatePoolSize: 10
 };
@@ -20,6 +26,9 @@ let localVideo = null;
 let remoteVideo = null;
 let localRole = null;
 let connectionStatus = "disconnected"; // Track connection status
+
+// Check if running in secure context
+const isSecureContext = window.isSecureContext || location.protocol === 'https:' || location.hostname === 'localhost';
 
 // Debug logger
 function logDebug(type, message, data = null) {
@@ -62,6 +71,14 @@ function updateConnectionStatus(status) {
 
 // Check browser compatibility
 function checkBrowserCompatibility() {
+  // Check for secure context
+  if (!isSecureContext) {
+    return {
+      compatible: false,
+      message: "WebRTC requires a secure context (HTTPS). Please use HTTPS or localhost."
+    };
+  }
+  
   // Check for basic WebRTC support
   if (!window.RTCPeerConnection) {
     return {
@@ -188,6 +205,12 @@ async function startVideo() {
     logDebug("media", "Starting local video...");
     updateConnectionStatus("initializing");
     
+    // Check if we're in a secure context
+    if (!isSecureContext) {
+      logDebug("error", "Not in a secure context. WebRTC requires HTTPS.");
+      alert("WebRTC requires a secure connection (HTTPS). Video chat may not work on insecure connections.");
+    }
+    
     try {
       // Try with both video and audio
       localStream = await navigator.mediaDevices.getUserMedia({
@@ -199,6 +222,20 @@ async function startVideo() {
       logDebug("success", "Camera and microphone access granted");
     } catch (mediaError) {
       logDebug("error", "First media error:", mediaError.name);
+      
+      // Show more detailed error message
+      const errorDetails = {
+        NotAllowedError: "Permission denied. Please allow camera and microphone access in your browser settings.",
+        NotFoundError: "No camera or microphone found on your device.",
+        NotReadableError: "Could not access your camera/microphone. It might be used by another application.",
+        OverconstrainedError: "Your camera doesn't meet the required constraints.",
+        AbortError: "Media capture was aborted.",
+        SecurityError: "Media capture was blocked due to security restrictions.",
+        TypeError: "No media tracks of the requested type available."
+      };
+      
+      const errorMessage = errorDetails[mediaError.name] || mediaError.message || "Unknown media error";
+      logDebug("error", errorMessage);
       
       // Try with just video if both failed
       try {
@@ -449,7 +486,7 @@ function handleDisconnect() {
     peerConnection.close();
     peerConnection = null;
   }
-  
+    
   // Notify server about disconnection
   if (socket && localRole) {
     socket.emit('webrtc_disconnect');

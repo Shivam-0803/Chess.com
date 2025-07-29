@@ -151,6 +151,23 @@ function initializeWebRTC() {
   remoteVideo.addEventListener('loadedmetadata', () => {
     logDebug("media", "Remote video stream dimensions:", 
       `${remoteVideo.videoWidth}x${remoteVideo.videoHeight}`);
+    
+    // Hide fallback when video loads
+    const fallback = remoteVideo.parentElement.querySelector('.video-fallback');
+    if (fallback) {
+      fallback.style.display = 'none';
+    }
+  });
+
+  localVideo.addEventListener('loadedmetadata', () => {
+    logDebug("media", "Local video stream dimensions:", 
+      `${localVideo.videoWidth}x${localVideo.videoHeight}`);
+    
+    // Hide fallback when video loads
+    const fallback = localVideo.parentElement.querySelector('.video-fallback');
+    if (fallback) {
+      fallback.style.display = 'none';
+    }
   });
 
   // Assign role and auto-start if role is already known

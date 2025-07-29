@@ -98,25 +98,31 @@ function displayMessage(message, sender, role, isOwn = false) {
 
   // Remove welcome message if it exists
   const welcomeMsg = chatMessages.querySelector('.text-center');
-  if (welcomeMsg) {
+  if (welcomeMsg && welcomeMsg.textContent.includes('Chat with your opponent')) {
     welcomeMsg.remove();
   }
 
   const messageDiv = document.createElement('div');
-  messageDiv.className = `message ${isOwn ? 'own' : 'other'}`;
+  messageDiv.className = `message ${isOwn ? 'own' : 'other'} mb-3 p-3 rounded-2xl max-w-xs transition-all duration-300 transform hover:scale-105`;
 
   const senderSpan = document.createElement('div');
-  senderSpan.className = 'message-sender';
+  senderSpan.className = 'message-sender text-xs opacity-70 mb-1';
   senderSpan.textContent = isOwn ? 'You' : `${sender} (${role === 'w' ? 'White' : 'Black'})`;
 
   const messageText = document.createElement('div');
+  messageText.className = 'text-sm leading-relaxed';
   messageText.textContent = message;
+
+  const timestamp = document.createElement('div');
+  timestamp.className = 'text-xs opacity-50 mt-1';
+  timestamp.textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 
   messageDiv.appendChild(senderSpan);
   messageDiv.appendChild(messageText);
+  messageDiv.appendChild(timestamp);
   chatMessages.appendChild(messageDiv);
 
-  // Scroll to bottom
+  // Scroll to bottom with smooth behavior
   chatMessages.scrollTop = chatMessages.scrollHeight;
 
   // Limit messages to prevent memory issues
@@ -131,8 +137,8 @@ function displaySystemMessage(message) {
   if (!chatMessages) return;
 
   const messageDiv = document.createElement('div');
-  messageDiv.className = 'text-center text-gray-500 text-sm py-2 border-l-2 border-blue-500 pl-3 my-2';
-  messageDiv.innerHTML = `<i class="fas fa-info-circle mr-1"></i>${message}`;
+  messageDiv.className = 'text-center text-gray-300 text-sm py-3 px-4 my-3 bg-white/5 backdrop-blur-md rounded-xl border border-white/10 transition-all duration-300';
+  messageDiv.innerHTML = `<i class="fas fa-info-circle mr-2 text-blue-400"></i>${message}`;
 
   chatMessages.appendChild(messageDiv);
   chatMessages.scrollTop = chatMessages.scrollHeight;

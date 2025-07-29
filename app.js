@@ -149,6 +149,43 @@ io.on("connection", function (uniquesocket) {
     }
   });
 
+  // Chat message handling
+  uniquesocket.on('chatMessage', (data) => {
+    try {
+      // Validate message
+      if (!data.message || typeof data.message !== 'string') return;
+      if (data.message.length > 200) return;
+      if (!data.role || !['w', 'b'].includes(data.role)) return;
+      
+      // Verify sender role
+      if ((data.role === 'w' && uniquesocket.id !== players.white) ||
+          (data.role === 'b' && uniquesocket.id !== players.black)) {
+        return;
+      }
+      
+      // Sanitize message
+      const sanitizedMessage = data.message.replace(/[<>]/g, '');
+      
+      const messageData = {
+        message: sanitizedMessage,
+        sender: data.role === 'w' ? 'White' : 'Black',
+        role: data.role,
+        timestamp: Date.now()
+      };
+      
+      // Send to the other player
+      if (data.role === 'w' && players.black) {
+        io.to(players.black).emit('chatMessage', messageData);
+      } else if (data.role === 'b' && players.white) {
+        io.to(players.white).emit('chatMessage', messageData);
+      }
+      
+      logDebug("info", `Chat message from ${data.role}: ${sanitizedMessage}`);
+    } catch (err) {
+      logDebug("error", `Error handling chat message: ${err.message}`);
+    }
+  });
+
   uniquesocket.on("move", (move) => {
     try {
       if (chess.turn() === "w" && uniquesocket.id !== players.white) return;

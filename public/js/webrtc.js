@@ -56,19 +56,11 @@ function logDebug(type, message, data = null) {
 // Update connection status in UI
 function updateConnectionStatus(status) {
   connectionStatus = status;
-  const statusElement = document.getElementById('connectionStatus');
-  if (statusElement) {
-    statusElement.textContent = status;
-    
-    // Update status color
-    statusElement.className = "text-xs font-medium px-2 py-1 rounded-full";
-    if (status.includes("connected") || status.includes("established")) {
-      statusElement.classList.add("bg-green-100", "text-green-800");
-    } else if (status.includes("connecting") || status.includes("checking")) {
-      statusElement.classList.add("bg-yellow-100", "text-yellow-800");
-    } else {
-      statusElement.classList.add("bg-red-100", "text-red-800");
-    }
+  
+  // Update main connection status
+  if (window.chatFunctions && window.chatFunctions.updateConnectionStatus) {
+    const isConnected = status.includes("connected") || status.includes("established");
+    window.chatFunctions.updateConnectionStatus(status, isConnected);
   }
 }
 
@@ -171,35 +163,22 @@ function initializeWebRTC() {
   socket.on('playerRole', function (role) {
     localRole = role;
     logDebug("info", "Received role:", localRole);
+    
+    // Update player role display
+    if (window.chatFunctions && window.chatFunctions.updatePlayerRoleDisplay) {
+      window.chatFunctions.updatePlayerRoleDisplay(role);
+    }
+    
     if (localVideo && remoteVideo) {
       setTimeout(() => startVideo(), 500);
     }
   });
 }
 
-// Create connection status element
+// Create connection status element (now handled in HTML)
 function createConnectionStatusElement() {
-  // Check if element already exists
-  if (document.getElementById('connectionStatus')) return;
-  
-  const videoControls = document.getElementById('videoControls');
-  if (videoControls) {
-    const statusContainer = document.createElement('div');
-    statusContainer.className = "flex items-center justify-center mt-2";
-    
-    const statusLabel = document.createElement('span');
-    statusLabel.className = "text-xs text-gray-400 mr-2";
-    statusLabel.textContent = "Connection:";
-    
-    const statusElement = document.createElement('span');
-    statusElement.id = "connectionStatus";
-    statusElement.className = "text-xs font-medium px-2 py-1 rounded-full bg-gray-100 text-gray-800";
-    statusElement.textContent = "disconnected";
-    
-    statusContainer.appendChild(statusLabel);
-    statusContainer.appendChild(statusElement);
-    videoControls.appendChild(statusContainer);
-  }
+  // Status element is now part of the main HTML
+  return;
 }
 
 // Start video stream
